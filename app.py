@@ -112,7 +112,7 @@ def docker_get_json(path):
 def guess_protocol(host_port, labels):
     if "dashboard.protocol" in labels:
         return labels["dashboard.protocol"]
-    if host_port in {"443", "8443"}:
+    if host_port in {"443", "8443", "9443"}:
         return "https"
     return "http"
 
@@ -157,6 +157,7 @@ def discover_services():
         return {"defaultHost": HOSTNAME, "services": []}
 
     services = []
+    seen = set()
     for summary in containers:
         container_id = summary.get("Id")
         if not container_id:
@@ -172,6 +173,9 @@ def discover_services():
         container_description = description(container)
 
         for container_port, bindings in ports.items():
+            if not container_port.endswith("/tcp"):
+                continue
+
             if not bindings:
                 if HIDE_UNPUBLISHED:
                     continue
@@ -185,6 +189,10 @@ def discover_services():
                 host = guess_host(labels)
                 protocol = guess_protocol(host_port, labels)
                 path = guess_path(labels)
+                service_key = (container_name, host, host_port, protocol, path)
+                if service_key in seen:
+                    continue
+                seen.add(service_key)
 
                 services.append(
                     {
