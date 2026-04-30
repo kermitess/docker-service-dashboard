@@ -3,7 +3,6 @@
 import json
 import os
 import socket
-import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,13 +13,57 @@ INDEX_FILE = BASE_DIR / "index.html"
 HOSTNAME = os.environ.get("DASHBOARD_HOST") or f"{socket.gethostname()}.local"
 PORT = int(os.environ.get("PORT", "8080"))
 HIDE_UNPUBLISHED = os.environ.get("DASHBOARD_HIDE_UNPUBLISHED", "true").lower() == "true"
+DOCKER_SOCKET = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
 
 
-def run_command(args):
-    result = subprocess.run(args, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "command failed")
-    return result.stdout
+def docker_get_json(path):
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.connect(DOCKER_SOCKET)
+            request = (
+                f"GET {path} HTTP/1.1\r\n"
+                "Host: docker\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+            )
+            client.sendall(request.encode("ascii"))
+
+            chunks = []
+            while True:
+                chunk = client.recv(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Docker socket not found at {DOCKER_SOCKET}") from exc
+    except PermissionError as exc:
+        raise RuntimeError(f"Permission denied opening Docker socket at {DOCKER_SOCKET}") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Could not connect to Docker socket at {DOCKER_SOCKET}: {exc}") from exc
+
+    response = b"".join(chunks)
+    try:
+        header_bytes, body = response.split(b"\r\n\r\n", 1)
+    except ValueError as exc:
+        raise RuntimeError("Invalid response from Docker API") from exc
+
+    status_line = header_bytes.split(b"\r\n", 1)[0].decode("iso-8859-1", errors="replace")
+    parts = status_line.split(" ", 2)
+    if len(parts) < 2 or not parts[1].isdigit():
+        raise RuntimeError(f"Unexpected Docker API status line: {status_line}")
+
+    status_code = int(parts[1])
+    if status_code >= 400:
+        message = body.decode("utf-8", errors="replace").strip() or status_line
+        raise RuntimeError(f"Docker API error {status_code}: {message}")
+
+    if not body:
+        return None
+
+    try:
+        return json.loads(body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Docker API returned invalid JSON") from exc
 
 
 def guess_protocol(host_port, labels):
@@ -66,15 +109,17 @@ def should_hide(container):
 
 
 def discover_services():
-    ids = [line.strip() for line in run_command(["docker", "ps", "-q"]).splitlines() if line.strip()]
-    if not ids:
+    containers = docker_get_json("/containers/json")
+    if not containers:
         return {"defaultHost": HOSTNAME, "services": []}
 
-    inspect_output = run_command(["docker", "inspect", *ids])
-    containers = json.loads(inspect_output)
-
     services = []
-    for container in containers:
+    for summary in containers:
+        container_id = summary.get("Id")
+        if not container_id:
+            continue
+
+        container = docker_get_json(f"/containers/{container_id}/json")
         if should_hide(container):
             continue
 
