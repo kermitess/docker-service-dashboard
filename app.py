@@ -16,6 +16,45 @@ HIDE_UNPUBLISHED = os.environ.get("DASHBOARD_HIDE_UNPUBLISHED", "true").lower() 
 DOCKER_SOCKET = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
 
 
+def parse_headers(header_bytes):
+    lines = header_bytes.split(b"\r\n")
+    headers = {}
+    for line in lines[1:]:
+        if b":" not in line:
+            continue
+        key, value = line.split(b":", 1)
+        headers[key.decode("iso-8859-1").strip().lower()] = value.decode("iso-8859-1").strip()
+    return headers
+
+
+def decode_chunked_body(body):
+    decoded = bytearray()
+    remaining = body
+
+    while remaining:
+        line_end = remaining.find(b"\r\n")
+        if line_end == -1:
+            raise RuntimeError("Invalid chunked response from Docker API")
+
+        chunk_size_line = remaining[:line_end].split(b";", 1)[0]
+        try:
+            chunk_size = int(chunk_size_line, 16)
+        except ValueError as exc:
+            raise RuntimeError("Invalid chunk size from Docker API") from exc
+
+        remaining = remaining[line_end + 2 :]
+        if chunk_size == 0:
+            return bytes(decoded)
+
+        if len(remaining) < chunk_size + 2:
+            raise RuntimeError("Incomplete chunked response from Docker API")
+
+        decoded.extend(remaining[:chunk_size])
+        remaining = remaining[chunk_size + 2 :]
+
+    raise RuntimeError("Incomplete chunked response from Docker API")
+
+
 def docker_get_json(path):
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -47,12 +86,16 @@ def docker_get_json(path):
     except ValueError as exc:
         raise RuntimeError("Invalid response from Docker API") from exc
 
+    headers = parse_headers(header_bytes)
     status_line = header_bytes.split(b"\r\n", 1)[0].decode("iso-8859-1", errors="replace")
     parts = status_line.split(" ", 2)
     if len(parts) < 2 or not parts[1].isdigit():
         raise RuntimeError(f"Unexpected Docker API status line: {status_line}")
 
     status_code = int(parts[1])
+    if headers.get("transfer-encoding", "").lower() == "chunked":
+        body = decode_chunked_body(body)
+
     if status_code >= 400:
         message = body.decode("utf-8", errors="replace").strip() or status_line
         raise RuntimeError(f"Docker API error {status_code}: {message}")
