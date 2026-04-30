@@ -384,19 +384,6 @@
 
       loadServices();
 
-      if (!isFilePreview) {
-        setInterval(() => {
-          fetch("./services.json", { cache: "no-store" })
-            .then((response) => {
-              if (!response.ok) {
-                throw new Error(`Request failed with ${response.status}`);
-              }
-              return response.json();
-            })
-            .then(renderServices)
-            .catch(() => {});
-        }, 30000);
-      }
     </script>
   </body>
 </html>

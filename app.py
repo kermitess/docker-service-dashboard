@@ -2,6 +2,7 @@
 
 import json
 import os
+import shlex
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,6 +15,7 @@ HOSTNAME = os.environ.get("DASHBOARD_HOST") or f"{socket.gethostname()}.local"
 PORT = int(os.environ.get("PORT", "8080"))
 HIDE_UNPUBLISHED = os.environ.get("DASHBOARD_HIDE_UNPUBLISHED", "true").lower() == "true"
 DOCKER_SOCKET = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
+CADDYFILE_PATH = os.environ.get("CADDYFILE_PATH", "/etc/caddy/Caddyfile")
 
 
 def parse_headers(header_bytes):
@@ -125,6 +127,119 @@ def guess_path(labels):
     return labels.get("dashboard.path", "")
 
 
+def normalize_site_address(address):
+    value = address.strip().rstrip("{").strip()
+    if not value or value.startswith(":") or value == "{":
+        return None
+
+    if "://" in value:
+        parsed = urlparse(value)
+        host = parsed.hostname
+        scheme = parsed.scheme or "https"
+        port = parsed.port or (443 if scheme == "https" else 80)
+        path = parsed.path or ""
+    else:
+        host_part = value
+        path = ""
+        if "/" in host_part:
+            host_part, _, path_part = host_part.partition("/")
+            path = f"/{path_part}" if path_part else ""
+
+        if ":" in host_part:
+            host, port_text = host_part.rsplit(":", 1)
+            if not port_text.isdigit():
+                return None
+            port = int(port_text)
+        else:
+            host = host_part
+            port = 443
+
+        scheme = "https" if port in {443, 8443, 9443} else "http"
+
+    if not host:
+        return None
+
+    return {
+        "host": host,
+        "protocol": scheme,
+        "port": port,
+        "path": path,
+    }
+
+
+def parse_upstream_target(token):
+    value = token.strip().rstrip("{").strip()
+    if not value or value.startswith("unix/"):
+        return None
+
+    if "://" in value:
+        parsed = urlparse(value)
+        host = parsed.hostname
+        port = parsed.port
+    else:
+        host = value
+        port = None
+        if ":" in value:
+            host, port_text = value.rsplit(":", 1)
+            if port_text.isdigit():
+                port = int(port_text)
+
+    if not host or port is None:
+        return None
+
+    return {"host": host, "port": port}
+
+
+def read_caddy_routes():
+    caddyfile = Path(CADDYFILE_PATH)
+    if not caddyfile.exists():
+        return []
+
+    lines = caddyfile.read_text(encoding="utf-8").splitlines()
+    routes = []
+    current_sites = None
+    depth = 0
+
+    for raw_line in lines:
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        opens = line.count("{")
+        closes = line.count("}")
+
+        if current_sites is None and line.endswith("{") and not line.startswith("{"):
+            header = line[:-1].strip()
+            address_tokens = [token.strip() for chunk in header.split() for token in chunk.split(",")]
+            sites = [normalize_site_address(token) for token in address_tokens]
+            current_sites = [site for site in sites if site]
+            depth = opens - closes
+            continue
+
+        if current_sites:
+            if line.startswith("reverse_proxy "):
+                try:
+                    tokens = shlex.split(line)
+                except ValueError:
+                    tokens = line.split()
+
+                upstream_tokens = tokens[1:]
+                if upstream_tokens and (upstream_tokens[0].startswith("/") or upstream_tokens[0].startswith("@")):
+                    upstream_tokens = upstream_tokens[1:]
+
+                upstreams = [parse_upstream_target(token) for token in upstream_tokens if token != "{"]
+                upstreams = [upstream for upstream in upstreams if upstream]
+                if upstreams:
+                    routes.append({"sites": current_sites, "upstreams": upstreams})
+
+            depth += opens - closes
+            if depth <= 0:
+                current_sites = None
+                depth = 0
+
+    return routes
+
+
 def display_name(container):
     labels = container.get("Config", {}).get("Labels", {}) or {}
     configured = labels.get("dashboard.name")
@@ -151,11 +266,40 @@ def should_hide(container):
     return labels.get("dashboard.hide", "false").lower() == "true"
 
 
+def container_identifiers(container):
+    labels = container.get("Config", {}).get("Labels", {}) or {}
+    identifiers = {
+        container.get("Name", "").lstrip("/"),
+        labels.get("com.docker.compose.service", ""),
+        container.get("Config", {}).get("Hostname", ""),
+    }
+
+    for network in (container.get("NetworkSettings", {}).get("Networks", {}) or {}).values():
+        identifiers.update(network.get("Aliases", []) or [])
+
+    return {identifier for identifier in identifiers if identifier}
+
+
+def caddy_matches_container(route, container, published_tcp_ports, container_tcp_ports, identifiers):
+    for upstream in route["upstreams"]:
+        upstream_host = upstream["host"]
+        upstream_port = upstream["port"]
+
+        if upstream_host in identifiers and upstream_port in container_tcp_ports:
+            return True
+
+        if upstream_host in {"127.0.0.1", "localhost", HOSTNAME} and upstream_port in published_tcp_ports:
+            return True
+
+    return False
+
+
 def discover_services():
     containers = docker_get_json("/containers/json")
     if not containers:
         return {"defaultHost": HOSTNAME, "services": []}
 
+    caddy_routes = read_caddy_routes()
     services = []
     seen = set()
     for summary in containers:
@@ -171,10 +315,17 @@ def discover_services():
         ports = container.get("NetworkSettings", {}).get("Ports", {}) or {}
         container_name = display_name(container)
         container_description = description(container)
+        identifiers = container_identifiers(container)
+        published_tcp_ports = set()
+        container_tcp_ports = set()
 
         for container_port, bindings in ports.items():
             if not container_port.endswith("/tcp"):
                 continue
+
+            container_port_number = container_port.split("/", 1)[0]
+            if container_port_number.isdigit():
+                container_tcp_ports.add(int(container_port_number))
 
             if not bindings:
                 if HIDE_UNPUBLISHED:
@@ -185,6 +336,8 @@ def discover_services():
                 host_port = binding.get("HostPort")
                 if not host_port:
                     continue
+                if host_port.isdigit():
+                    published_tcp_ports.add(int(host_port))
 
                 host = guess_host(labels)
                 protocol = guess_protocol(host_port, labels)
@@ -203,6 +356,40 @@ def discover_services():
                         "path": path,
                         "description": container_description,
                         "containerPort": container_port,
+                    }
+                )
+
+        for route in caddy_routes:
+            if not caddy_matches_container(
+                route,
+                container,
+                published_tcp_ports,
+                container_tcp_ports,
+                identifiers,
+            ):
+                continue
+
+            for site in route["sites"]:
+                service_key = (
+                    container_name,
+                    site["host"],
+                    str(site["port"]),
+                    site["protocol"],
+                    site["path"],
+                )
+                if service_key in seen:
+                    continue
+                seen.add(service_key)
+
+                services.append(
+                    {
+                        "name": container_name,
+                        "port": site["port"],
+                        "host": site["host"],
+                        "protocol": site["protocol"],
+                        "path": site["path"],
+                        "description": container_description,
+                        "containerPort": "caddy",
                     }
                 )
 

@@ -30,6 +30,18 @@ docker run -d \
   service-dashboard
 ```
 
+With automatic Caddy hostname discovery:
+
+```sh
+docker run -d \
+  --name service-dashboard \
+  -p 8080:8080 \
+  -e DASHBOARD_HOST=m920q.local \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v /path/to/Caddyfile:/etc/caddy/Caddyfile:ro \
+  service-dashboard
+```
+
 ## Labels
 
 Optional container labels:
