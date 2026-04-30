@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Server Services</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f3f2ee;
+        --bg-accent: #dde6dd;
+        --surface: rgba(255, 255, 255, 0.84);
+        --surface-strong: rgba(255, 255, 255, 0.96);
+        --text: #18211d;
+        --muted: #5f6c64;
+        --line: rgba(24, 33, 29, 0.1);
+        --line-strong: rgba(24, 33, 29, 0.16);
+        --brand: #1c6b4a;
+        --brand-strong: #135238;
+        --radius-lg: 24px;
+        --radius-md: 18px;
+        --radius-sm: 12px;
+        --shadow: 0 20px 50px rgba(27, 39, 31, 0.08);
+        --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+        --font-mono: "IBM Plex Mono", "SFMono-Regular", "Consolas", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background:
+          radial-gradient(circle at top left, rgba(28, 107, 74, 0.12), transparent 28%),
+          linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 18%, #f8f7f4 100%);
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font-sans);
+        color: var(--text);
+        background: transparent;
+      }
+
+      .wrap {
+        width: min(1040px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 64px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 24px;
+        margin-bottom: 28px;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius-lg) + 4px);
+        background: linear-gradient(180deg, var(--surface-strong), var(--surface));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      .eyebrow,
+      .stat {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.65);
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2.1rem, 5vw, 4rem);
+        line-height: 0.92;
+        letter-spacing: -0.04em;
+      }
+
+      .subtitle {
+        margin: 0;
+        max-width: 40rem;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-height: 224px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, var(--surface-strong), var(--surface));
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+      }
+
+      .card-header {
+        display: grid;
+        gap: 8px;
+      }
+
+      .port {
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: var(--radius-sm);
+        background: rgba(28, 107, 74, 0.08);
+        color: var(--brand-strong);
+        font: 600 0.83rem/1 var(--font-mono);
+      }
+
+      .meta,
+      .description,
+      .card-link {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .meta {
+        font-size: 0.92rem;
+        word-break: break-word;
+      }
+
+      .description {
+        flex: 1;
+        line-height: 1.5;
+      }
+
+      .link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: fit-content;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        background: var(--brand);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+        transition:
+          transform 120ms ease,
+          background-color 120ms ease,
+          box-shadow 120ms ease;
+      }
+
+      .link:hover,
+      .link:focus-visible {
+        background: var(--brand-strong);
+        box-shadow: 0 10px 24px rgba(19, 82, 56, 0.18);
+        transform: translateY(-1px) scale(1.01);
+      }
+
+      .empty,
+      .error {
+        padding: 22px;
+        border-radius: var(--radius-md);
+        background: linear-gradient(180deg, var(--surface-strong), var(--surface));
+        border: 1px solid var(--line);
+        color: var(--muted);
+        box-shadow: var(--shadow);
+      }
+
+      .error {
+        border-color: rgba(150, 49, 49, 0.18);
+      }
+
+      @keyframes cardIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .card,
+      .empty,
+      .error {
+        animation: cardIn 180ms ease-out;
+      }
+
+      @media (max-width: 640px) {
+        .wrap {
+          padding-top: 18px;
+        }
+
+        .hero {
+          padding: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="hero">
+        <div class="hero-top">
+          <div class="eyebrow">Local Network</div>
+          <div class="stats" id="stats">
+            <div class="stat">Loading</div>
+          </div>
+        </div>
+        <div>
+          <h1>Service Dashboard</h1>
+          <p class="subtitle">Published Docker services on <strong>m920q.local</strong>.</p>
+        </div>
+      </section>
+      <section id="services" class="grid" aria-live="polite"></section>
+    </main>
+
+    <script>
+      const servicesRoot = document.getElementById("services");
+      const statsRoot = document.getElementById("stats");
+
+      function buildUrl(service, defaultHost) {
+        const protocol = service.protocol || "http";
+        const host = service.host || defaultHost;
+        const path = service.path || "";
+        return `${protocol}://${host}:${service.port}${path}`;
+      }
+
+      function renderStats(services, defaultHost) {
+        const hosts = new Set(
+          services.map((service) => service.host || defaultHost).filter(Boolean)
+        );
+
+        statsRoot.innerHTML = `
+          <div class="stat">${services.length} service${services.length === 1 ? "" : "s"}</div>
+          <div class="stat">${hosts.size} host${hosts.size === 1 ? "" : "s"}</div>
+        `;
+      }
+
+      function renderServices(config) {
+        const services = Array.isArray(config.services) ? config.services : [];
+        renderStats(services, config.defaultHost);
+
+        if (!services.length) {
+          servicesRoot.innerHTML =
+            '<div class="empty">No published Docker ports were found.</div>';
+          return;
+        }
+
+        servicesRoot.innerHTML = services
+          .map((service) => {
+            const url = buildUrl(service, config.defaultHost);
+            const description = service.description
+              ? `<p class="description">${service.description}</p>`
+              : "";
+            const host = service.host || config.defaultHost;
+
+            return `
+              <article class="card">
+                <div class="card-header">
+                  <div class="port">${service.protocol || "http"}:${service.port}</div>
+                  <h2>${service.name}</h2>
+                  <p class="meta">${host}${service.path || ""}</p>
+                </div>
+                ${description}
+                <a class="link" href="${url}" target="_blank" rel="noreferrer">Open service</a>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      function renderError() {
+        statsRoot.innerHTML = '<div class="stat">Unavailable</div>';
+        servicesRoot.innerHTML =
+          '<div class="error">Could not load the live service list.</div>';
+      }
+
+      fetch("./services.json")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Request failed with ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(renderServices)
+        .catch(renderError);
+
+      setInterval(() => {
+        fetch("./services.json", { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`Request failed with ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(renderServices)
+          .catch(() => {});
+      }, 30000);
+    </script>
+  </body>
+</html>
