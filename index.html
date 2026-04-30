@@ -44,16 +44,16 @@
       }
 
       .wrap {
-        width: min(1040px, calc(100% - 32px));
+        width: min(1120px, calc(100% - 28px));
         margin: 0 auto;
-        padding: 32px 0 64px;
+        padding: 20px 0 40px;
       }
 
       .hero {
         display: grid;
-        gap: 24px;
-        margin-bottom: 28px;
-        padding: 28px;
+        gap: 18px;
+        margin-bottom: 18px;
+        padding: 20px 22px;
         border: 1px solid var(--line);
         border-radius: calc(var(--radius-lg) + 4px);
         background: linear-gradient(180deg, var(--surface-strong), var(--surface));
@@ -86,9 +86,9 @@
       }
 
       h1 {
-        margin: 0 0 12px;
-        font-size: clamp(2.1rem, 5vw, 4rem);
-        line-height: 0.92;
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 4vw, 3rem);
+        line-height: 0.94;
         letter-spacing: -0.04em;
       }
 
@@ -96,8 +96,8 @@
         margin: 0;
         max-width: 40rem;
         color: var(--muted);
-        font-size: 1rem;
-        line-height: 1.6;
+        font-size: 0.95rem;
+        line-height: 1.45;
       }
 
       .stats {
@@ -108,42 +108,41 @@
 
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
       }
 
       .card {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        min-height: 224px;
-        padding: 20px;
+        gap: 12px;
+        padding: 16px;
         border: 1px solid var(--line);
-        border-radius: var(--radius-lg);
+        border-radius: 20px;
         background: linear-gradient(180deg, var(--surface-strong), var(--surface));
-        box-shadow: var(--shadow);
+        box-shadow: 0 14px 36px rgba(27, 39, 31, 0.06);
         backdrop-filter: blur(14px);
       }
 
       .card h2 {
         margin: 0;
-        font-size: 1.2rem;
+        font-size: 1.05rem;
         line-height: 1.1;
         letter-spacing: -0.03em;
       }
 
       .card-header {
         display: grid;
-        gap: 8px;
+        gap: 6px;
       }
 
       .port {
         width: fit-content;
-        padding: 6px 10px;
+        padding: 5px 9px;
         border-radius: var(--radius-sm);
         background: rgba(28, 107, 74, 0.08);
         color: var(--brand-strong);
-        font: 600 0.83rem/1 var(--font-mono);
+        font: 600 0.78rem/1 var(--font-mono);
       }
 
       .meta,
@@ -154,13 +153,29 @@
       }
 
       .meta {
-        font-size: 0.92rem;
+        font-size: 0.84rem;
+        letter-spacing: 0.01em;
+      }
+
+      .host {
+        color: var(--text);
+        opacity: 0.72;
+      }
+
+      .meta + .meta {
+        margin-top: -2px;
+      }
+
+      .image {
+        display: -webkit-box;
+        overflow: hidden;
         word-break: break-word;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
       }
 
       .description {
-        flex: 1;
-        line-height: 1.5;
+        line-height: 1.4;
       }
 
       .link {
@@ -169,13 +184,14 @@
         justify-content: center;
         gap: 8px;
         width: fit-content;
-        min-height: 42px;
-        padding: 0 16px;
+        min-height: 36px;
+        padding: 0 14px;
         border: 1px solid transparent;
         border-radius: 999px;
         background: var(--brand);
         color: #fff;
         text-decoration: none;
+        font-size: 0.92rem;
         font-weight: 700;
         transition:
           transform 120ms ease,
@@ -223,11 +239,12 @@
 
       @media (max-width: 640px) {
         .wrap {
-          padding-top: 18px;
+          width: min(100%, calc(100% - 20px));
+          padding-top: 12px;
         }
 
         .hero {
-          padding: 22px;
+          padding: 18px;
         }
       }
     </style>
@@ -252,6 +269,36 @@
     <script>
       const servicesRoot = document.getElementById("services");
       const statsRoot = document.getElementById("stats");
+      const isFilePreview = window.location.protocol === "file:";
+      const demoConfig = {
+        defaultHost: "m920q.local",
+        services: [
+          {
+            name: "portainer",
+            port: 9443,
+            host: "m920q.local",
+            protocol: "https",
+            path: "",
+            description: "portainer/portainer-ce:lts",
+          },
+          {
+            name: "filebrowser",
+            port: 8080,
+            host: "m920q.local",
+            protocol: "http",
+            path: "",
+            description: "docker.io/filebrowser/filebrowser:latest",
+          },
+          {
+            name: "headplane",
+            port: 3000,
+            host: "m920q.local",
+            protocol: "http",
+            path: "",
+            description: "ghcr.io/tale/headplane:0.6.2",
+          },
+        ],
+      };
 
       function buildUrl(service, defaultHost) {
         const protocol = service.protocol || "http";
@@ -273,6 +320,10 @@
 
       function renderServices(config) {
         const services = Array.isArray(config.services) ? config.services : [];
+        const hosts = new Set(
+          services.map((service) => service.host || config.defaultHost).filter(Boolean)
+        );
+        const showHost = hosts.size > 1;
         renderStats(services, config.defaultHost);
 
         if (!services.length) {
@@ -285,19 +336,22 @@
           .map((service) => {
             const url = buildUrl(service, config.defaultHost);
             const description = service.description
-              ? `<p class="description">${service.description}</p>`
+              ? `<p class="meta image">${service.description}</p>`
               : "";
             const host = service.host || config.defaultHost;
+            const hostLine = showHost
+              ? `<p class="meta host">${host}${service.path || ""}</p>`
+              : "";
 
             return `
               <article class="card">
                 <div class="card-header">
                   <div class="port">${service.protocol || "http"}:${service.port}</div>
                   <h2>${service.name}</h2>
-                  <p class="meta">${host}${service.path || ""}</p>
+                  ${hostLine}
                 </div>
                 ${description}
-                <a class="link" href="${url}" target="_blank" rel="noreferrer">Open service</a>
+                <a class="link" href="${url}" target="_blank" rel="noreferrer">Open</a>
               </article>
             `;
           })
@@ -310,18 +364,14 @@
           '<div class="error">Could not load the live service list.</div>';
       }
 
-      fetch("./services.json")
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`Request failed with ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(renderServices)
-        .catch(renderError);
+      function loadServices() {
+        if (isFilePreview) {
+          renderStats(demoConfig.services, demoConfig.defaultHost);
+          renderServices(demoConfig);
+          return Promise.resolve();
+        }
 
-      setInterval(() => {
-        fetch("./services.json", { cache: "no-store" })
+        return fetch("./services.json")
           .then((response) => {
             if (!response.ok) {
               throw new Error(`Request failed with ${response.status}`);
@@ -329,8 +379,24 @@
             return response.json();
           })
           .then(renderServices)
-          .catch(() => {});
-      }, 30000);
+          .catch(renderError);
+      }
+
+      loadServices();
+
+      if (!isFilePreview) {
+        setInterval(() => {
+          fetch("./services.json", { cache: "no-store" })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`Request failed with ${response.status}`);
+              }
+              return response.json();
+            })
+            .then(renderServices)
+            .catch(() => {});
+        }, 30000);
+      }
     </script>
   </body>
 </html>
