@@ -6,7 +6,7 @@
     <title>Server Services</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --bg: #f3f2ee;
         --bg-accent: #dde6dd;
         --surface: rgba(255, 255, 255, 0.84);
@@ -21,8 +21,38 @@
         --radius-md: 18px;
         --radius-sm: 12px;
         --shadow: 0 20px 50px rgba(27, 39, 31, 0.08);
+        --bg-end: #f8f7f4;
+        --pill-bg: rgba(255, 255, 255, 0.65);
+        --card-shadow: 0 14px 36px rgba(27, 39, 31, 0.06);
+        --port-bg: rgba(28, 107, 74, 0.08);
+        --button-text: #fff;
+        --link-shadow: 0 10px 24px rgba(19, 82, 56, 0.18);
+        --error-line: rgba(150, 49, 49, 0.18);
         --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
         --font-mono: "IBM Plex Mono", "SFMono-Regular", "Consolas", monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1412;
+          --bg-accent: #16201b;
+          --bg-end: #0f1412;
+          --surface: rgba(18, 24, 21, 0.84);
+          --surface-strong: rgba(24, 31, 27, 0.94);
+          --text: #edf3ee;
+          --muted: #a6b5ab;
+          --line: rgba(237, 243, 238, 0.1);
+          --line-strong: rgba(237, 243, 238, 0.18);
+          --brand: #5db587;
+          --brand-strong: #79c79a;
+          --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+          --pill-bg: rgba(255, 255, 255, 0.08);
+          --card-shadow: 0 14px 36px rgba(0, 0, 0, 0.25);
+          --port-bg: rgba(93, 181, 135, 0.12);
+          --button-text: #0f1412;
+          --link-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+          --error-line: rgba(231, 111, 111, 0.22);
+        }
       }
 
       * {
@@ -32,7 +62,7 @@
       html {
         background:
           radial-gradient(circle at top left, rgba(28, 107, 74, 0.12), transparent 28%),
-          linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 18%, #f8f7f4 100%);
+          linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 18%, var(--bg-end) 100%);
       }
 
       body {
@@ -77,7 +107,7 @@
         padding: 0 12px;
         border: 1px solid var(--line);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.65);
+        background: var(--pill-bg);
         color: var(--muted);
         font-size: 0.78rem;
         font-weight: 600;
@@ -120,7 +150,7 @@
         border: 1px solid var(--line);
         border-radius: 20px;
         background: linear-gradient(180deg, var(--surface-strong), var(--surface));
-        box-shadow: 0 14px 36px rgba(27, 39, 31, 0.06);
+        box-shadow: var(--card-shadow);
         backdrop-filter: blur(14px);
       }
 
@@ -140,7 +170,7 @@
         width: fit-content;
         padding: 5px 9px;
         border-radius: var(--radius-sm);
-        background: rgba(28, 107, 74, 0.08);
+        background: var(--port-bg);
         color: var(--brand-strong);
         font: 600 0.78rem/1 var(--font-mono);
       }
@@ -189,7 +219,7 @@
         border: 1px solid transparent;
         border-radius: 999px;
         background: var(--brand);
-        color: #fff;
+        color: var(--button-text);
         text-decoration: none;
         font-size: 0.92rem;
         font-weight: 700;
@@ -202,7 +232,7 @@
       .link:hover,
       .link:focus-visible {
         background: var(--brand-strong);
-        box-shadow: 0 10px 24px rgba(19, 82, 56, 0.18);
+        box-shadow: var(--link-shadow);
         transform: translateY(-1px) scale(1.01);
       }
 
@@ -217,7 +247,7 @@
       }
 
       .error {
-        border-color: rgba(150, 49, 49, 0.18);
+        border-color: var(--error-line);
       }
 
       @keyframes cardIn {
