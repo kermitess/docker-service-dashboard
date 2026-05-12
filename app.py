@@ -9,6 +9,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+SERVICE_DISCOVERY_ERROR = "Could not load services from the Docker runtime."
+
+
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_FILE = BASE_DIR / "index.html"
 HOSTNAME = os.environ.get("DASHBOARD_HOST") or f"{socket.gethostname()}.local"
@@ -261,6 +264,16 @@ def description(container):
     return container.get("Config", {}).get("Image", "")
 
 
+def list_containers():
+    return docker_get_json("/containers/json") or []
+
+
+def inspect_container(container_id, cache):
+    if container_id not in cache:
+        cache[container_id] = docker_get_json(f"/containers/{container_id}/json")
+    return cache[container_id]
+
+
 def should_hide(container):
     labels = container.get("Config", {}).get("Labels", {}) or {}
     return labels.get("dashboard.hide", "false").lower() == "true"
@@ -295,11 +308,12 @@ def caddy_matches_container(route, container, published_tcp_ports, container_tcp
 
 
 def discover_services():
-    containers = docker_get_json("/containers/json")
+    containers = list_containers()
     if not containers:
         return {"defaultHost": HOSTNAME, "services": []}
 
     caddy_routes = read_caddy_routes()
+    inspect_cache = {}
     services = []
     seen = set()
     for summary in containers:
@@ -307,7 +321,7 @@ def discover_services():
         if not container_id:
             continue
 
-        container = docker_get_json(f"/containers/{container_id}/json")
+        container = inspect_container(container_id, inspect_cache)
         if should_hide(container):
             continue
 
@@ -424,8 +438,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             payload = json.dumps(discover_services()).encode("utf-8")
             self.send_response(200)
-        except Exception as exc:
-            payload = json.dumps({"error": str(exc), "services": []}).encode("utf-8")
+        except Exception:
+            payload = json.dumps({"error": SERVICE_DISCOVERY_ERROR, "services": []}).encode("utf-8")
             self.send_response(500)
 
         self.send_header("Content-Type", "application/json; charset=utf-8")
