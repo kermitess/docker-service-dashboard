@@ -417,42 +417,72 @@
         const showHost = hosts.size > 1;
         renderStats(services, config.defaultHost);
 
+        servicesRoot.replaceChildren();
+
         if (!services.length) {
-          servicesRoot.innerHTML =
-            '<div class="empty">No published Docker ports were found.</div>';
+          const emptyState = document.createElement("div");
+          emptyState.className = "empty";
+          emptyState.textContent = "No published Docker ports were found.";
+          servicesRoot.append(emptyState);
           return;
         }
 
-        servicesRoot.innerHTML = services
-          .map((service) => {
-            const url = buildUrl(service, config.defaultHost);
-            const description = service.description
-              ? `<p class="meta image">${service.description}</p>`
-              : "";
-            const host = service.host || config.defaultHost;
-            const hostLine = showHost
-              ? `<p class="meta host">${host}${service.path || ""}</p>`
-              : "";
+        const fragment = document.createDocumentFragment();
 
-            return `
-              <article class="card">
-                <div class="card-header">
-                  <div class="port">${service.protocol || "http"}:${service.port}</div>
-                  <h2>${service.name}</h2>
-                  ${hostLine}
-                </div>
-                ${description}
-                <a class="link" href="${url}" target="_blank" rel="noreferrer">Open</a>
-              </article>
-            `;
-          })
-          .join("");
+        services.forEach((service) => {
+          const url = buildUrl(service, config.defaultHost);
+          const host = service.host || config.defaultHost;
+
+          const card = document.createElement("article");
+          card.className = "card";
+
+          const header = document.createElement("div");
+          header.className = "card-header";
+
+          const port = document.createElement("div");
+          port.className = "port";
+          port.textContent = `${service.protocol || "http"}:${service.port}`;
+          header.append(port);
+
+          const title = document.createElement("h2");
+          title.textContent = service.name;
+          header.append(title);
+
+          if (showHost) {
+            const hostLine = document.createElement("p");
+            hostLine.className = "meta host";
+            hostLine.textContent = `${host}${service.path || ""}`;
+            header.append(hostLine);
+          }
+
+          card.append(header);
+
+          if (service.description) {
+            const description = document.createElement("p");
+            description.className = "meta image";
+            description.textContent = service.description;
+            card.append(description);
+          }
+
+          const link = document.createElement("a");
+          link.className = "link";
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = "Open";
+          card.append(link);
+
+          fragment.append(card);
+        });
+
+        servicesRoot.append(fragment);
       }
 
       function renderError() {
         statsRoot.innerHTML = '<div class="stat">Unavailable</div>';
         servicesRoot.innerHTML =
-          '<div class="error">Could not load the live service list.</div>';
+          '<div class="error">Could not load the live service list. Check the server logs for details.</div>';
+        searchInput.disabled = true;
       }
 
       function loadServices() {
@@ -479,6 +509,10 @@
       }
 
       function filterAndRender() {
+        if (!allServices || !Array.isArray(allServices.services)) {
+          return;
+        }
+
         const query = searchInput.value.trim();
         const filtered = allServices.services.filter((s) => matchesQuery(s, query));
         const config = { ...allServices, services: filtered };

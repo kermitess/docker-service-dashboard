@@ -18,6 +18,12 @@ Optional override:
 DASHBOARD_HOST=m920q.local PORT=8080 python3 app.py
 ```
 
+## Tests
+
+```sh
+python3 -m unittest
+```
+
 ## Docker
 
 ```sh
